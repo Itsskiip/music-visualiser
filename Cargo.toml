@@ -1,0 +1,12 @@
+[package]
+name = "sound"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytemuck = "1"
+glium = "0.36.0"
+itertools = "0.14.0"
+ringbuf = "0.4.8"
+rodio = "0.20.1"
+rustfft = "6.2.0"
