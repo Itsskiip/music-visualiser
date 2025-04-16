@@ -5,8 +5,13 @@ use rustfft::{
     num_complex::{Complex, Complex32}, Fft, FftPlanner
 };
 
+pub struct ProcessorOutput {
+    pub left_fft: Vec<f32>,
+    pub right_fft: Vec<f32>,
+}
+
 pub struct Processor {
-    pub audio_buffer: Vec<(i16, i16)>,
+    pub audio_buffer: (Vec<i16>, Vec<i16>),
     fft_window: usize,
     fft_processor: FftProcessor,
     pub fft_output_bins: usize,
@@ -14,10 +19,12 @@ pub struct Processor {
     window: HannWindow,
 }
 
+pub enum Channel {LEFT, RIGHT}
+
 impl Processor {
     pub fn new(sample_window: usize, fft_output_bins: usize) -> Self{
         Self {
-            audio_buffer: vec![(0, 0); sample_window],
+            audio_buffer: (vec![0; sample_window], vec![0; sample_window]),
             fft_window: sample_window,
             fft_processor: FftProcessor::new(sample_window),
             window: HannWindow::new(sample_window),
@@ -26,20 +33,30 @@ impl Processor {
         }
     }
 
-    pub fn process_samples(&mut self) -> Vec<f32> {
-        // Average amplitude of the samples
-        // let mean = samples.iter().map(|x| *x as f32).sum::<f32>() / samples.len() as f32;
+    pub fn process_samples(&mut self) -> ProcessorOutput {
+        let left_fft = self.process_fft_samples(Channel::LEFT);
+        let right_fft = self.process_fft_samples(Channel::RIGHT);
+
+        ProcessorOutput { left_fft, right_fft }
+    }
+
+    fn process_fft_samples(&mut self, source: Channel) -> Vec<f32> {
         self.fft_io_vec.clear();
-        let samples_complex = self.audio_buffer.iter()
+
+        let channel = match source {
+            Channel::LEFT => &self.audio_buffer.0,
+            Channel::RIGHT => &self.audio_buffer.1,
+        };
+
+        let samples_complex = channel.iter()
             .enumerate() 
-            .map( |(u, (l, _r))| self.window.process((u, *l)))// Apply windowing
+            .map( |(u, d)| self.window.process((u, *d)))// Apply windowing
             .map( |x| Complex::new(x, 0.)) // Convert to Complex
             .chain(std::iter::repeat_n(Complex::ZERO, self.fft_window)) // Pad zeros
-            .collect_into(&mut self.fft_io_vec); // Collect into vec
-        
-        // Apply FFT on the batch in-place
-        self.fft_processor.process_batch(samples_complex);
-        
+            .collect_into(&mut self.fft_io_vec); // Collect into vec 
+
+        self.fft_processor.process_batch(samples_complex); 
+
         let parsed_samples = samples_complex
             .iter()
             .map(|x| x.norm() )// Take the norm
@@ -98,6 +115,12 @@ impl FftProcessor {
         self.fft.process_with_scratch(input, &mut self.scratch);
     }
 }
+
+// struct PhaseSpaceProcessor {
+//     history: HeapRb<f32>
+
+
+// }
 
 // Code from https://stackoverflow.com/questions/43921436/extend-iterator-with-a-mean-method
 trait MeanExt: Iterator {

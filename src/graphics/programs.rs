@@ -1,6 +1,6 @@
-use std::{marker::PhantomData, ops::AddAssign};
+use std::marker::PhantomData;
 
-use glium::{Program, Surface, VertexBuffer};
+use glium::{Frame, Program, Surface, VertexBuffer};
 use crate::graphics::Display;
 pub mod fftprogram;
 
@@ -33,7 +33,6 @@ where
     vertex_pre_buffer: Vec<V>,
     vertex_buffer: VertexBuffer<V>,
 
-    display: Display,
     _phantom: PhantomData<X>,
 }
 
@@ -49,19 +48,15 @@ where
             vertex_pre_buffer: vec![V::default(); size],
             vertex_buffer: VertexBuffer::empty_dynamic(display, size).unwrap(),
 
-            display: display.clone(),
             _phantom: PhantomData,
         }
     }
     
-    pub fn render<'a, I: Into<glium::index::IndicesSource<'a>>, U:glium::uniforms::Uniforms>(&mut self, values: &[X], indices: I, uniforms: &U) {
+    pub fn render<'a, I: Into<glium::index::IndicesSource<'a>>, U:glium::uniforms::Uniforms>(&mut self, target: &mut Frame, values: &[X], indices: I, uniforms: &U) {
         self.vertex_pre_buffer.iter_mut().zip(values).for_each(|(v, x)| v.assign(*x));
 
         self.vertex_buffer.write(&self.vertex_pre_buffer);
 
-        let mut target = self.display.draw();
-
-        target.clear_color(0., 0., 0., 1.);
         target.draw(
             &self.vertex_buffer, 
             indices, 
@@ -69,6 +64,5 @@ where
             uniforms, 
             &Default::default()
         ).unwrap();
-        target.finish().unwrap();
     }
 }

@@ -1,11 +1,10 @@
 use std::time::{Duration, Instant};
 
 use crate::{
-    processing, 
-    audio,
+    audio, processing::{self, ProcessorOutput}
 };
 
-use glium::winit::{self, window::Window};
+use glium::{winit::{self, window::Window}, Surface};
 
 pub type Display = glium::Display<glium::glutin::surface::WindowSurface>;
 
@@ -36,21 +35,31 @@ impl WindowSettings {
 
 pub struct Renderer {
     window: Window,
+    display: Display,
     
-    program: programs::fftprogram::FFTProgram,
+    left_fft: programs::fftprogram::FFTProgram,
+    right_fft: programs::fftprogram::FFTProgram,
 }
 
 impl Renderer {
     pub fn new(display: &Display, window: Window, fft_bins: usize) -> Self {
         Self {
             window,
-
-            program: programs::fftprogram::FFTProgram::new(fft_bins, &display),
+            display: display.clone(),
+            
+            left_fft: programs::fftprogram::FFTProgram::new(fft_bins, &display,[1.0, 0.0, 0.0, 0.5]),
+            right_fft: programs::fftprogram::FFTProgram::new(fft_bins, &display, [0.0, 0.0, 1.0, 0.5]), 
         }
     }
 
-    pub fn render(&mut self, values: &[f32]) {
-        self.program.render(values);
+    pub fn render(&mut self, values: &ProcessorOutput) {
+        let mut target = self.display.draw();
+        target.clear_color(0.2, 0.2, 0.2, 1.0);
+
+        self.left_fft.render(&mut target, &values.left_fft);
+        self.right_fft.render(&mut target, &values.right_fft);
+
+        target.finish().unwrap();
     }
 }
 
@@ -97,7 +106,7 @@ impl App<'_> {
     }
 
     fn render(&mut self) {
-        self.audio.get_samples(&mut self.processor.audio_buffer);
+        self.audio.get_samples((&mut self.processor.audio_buffer.0, &mut self.processor.audio_buffer.1));
 
         let bars = self.processor.process_samples();
         self.renderer.as_mut().unwrap().render(&bars);

@@ -11,7 +11,8 @@ pub struct Audio<'a> {
     last_sample: Duration,
     data: Box<dyn Iterator<Item=i16> + 'a>,
     buffer_size: usize,
-    internal_buffer: HeapRb<(i16, i16)>,
+    internal_buffer_left: HeapRb<i16>,
+    internal_buffer_right: HeapRb<i16>,
     sample_rate: usize,
     channels: usize,
 }
@@ -42,7 +43,8 @@ impl Audio<'_> {
             last_sample: Duration::ZERO,
             data: Box::new(source_data),
             buffer_size,
-            internal_buffer: HeapRb::new(buffer_size),
+            internal_buffer_left: HeapRb::new(buffer_size),
+            internal_buffer_right: HeapRb::new(buffer_size),
             sample_rate,
             channels,
         }
@@ -52,7 +54,7 @@ impl Audio<'_> {
         self.sink.play();
     }
 
-    pub fn get_samples(&mut self, slice: &mut [(i16, i16)]) {
+    pub fn get_samples(&mut self, slices: (&mut [i16], &mut[i16])) {
         let pos = self.sink.get_pos();
         let dif = pos - self.last_sample;
         self.last_sample = pos;
@@ -74,10 +76,16 @@ impl Audio<'_> {
                 let left = chunk.next().unwrap();
                 let right = chunk.next().unwrap_or(left);
                 (left, right)
-            });
+            }).for_each(
+                |(left, right)| {
+                    self.internal_buffer_left.push_overwrite(left);
+                    self.internal_buffer_right.push_overwrite(right);
+                }
+            );
         
-        self.internal_buffer.push_iter_overwrite(data);
         
-        self.internal_buffer.peek_slice(slice);
+        
+        self.internal_buffer_left.peek_slice(slices.0);
+        self.internal_buffer_right.peek_slice(slices.1);
     }   
 }
