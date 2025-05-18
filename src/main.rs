@@ -17,10 +17,11 @@ fn main() {
         "Nyoom",
         800, 
         600, 
-        120., 
+        165., 
         "music.mp3", 
         8192,
-        100);
+        4192,
+    400);
 
     event_loop.run_app(&mut app).unwrap();
 }

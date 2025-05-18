@@ -39,25 +39,29 @@ pub struct Renderer {
     
     left_fft: programs::fftprogram::FFTProgram,
     right_fft: programs::fftprogram::FFTProgram,
+    left_phase: programs::phaseprogram::PhaseProgram,
 }
 
 impl Renderer {
-    pub fn new(display: &Display, window: Window, fft_bins: usize) -> Self {
+    pub fn new(display: &Display, window: Window, fft_bins: usize, phase_len: usize) -> Self {
         Self {
             window,
             display: display.clone(),
             
-            left_fft: programs::fftprogram::FFTProgram::new(fft_bins, &display,[1.0, 0.0, 0.0, 0.5]),
-            right_fft: programs::fftprogram::FFTProgram::new(fft_bins, &display, [0.0, 0.0, 1.0, 0.5]), 
+            left_fft: programs::fftprogram::FFTProgram::new(fft_bins, &display,[0.0, 0.0, 0.0]),
+            right_fft: programs::fftprogram::FFTProgram::new(fft_bins, &display, [1.0, 0.0, 0.0]),
+            left_phase: programs::phaseprogram::PhaseProgram::new(phase_len, &display, [0.0, 0.0, 0.0]),
         }
     }
 
     pub fn render(&mut self, values: &ProcessorOutput) {
         let mut target = self.display.draw();
-        target.clear_color(0.2, 0.2, 0.2, 1.0);
+        target.clear_color(0., 0., 0., 1.);
 
         self.left_fft.render(&mut target, &values.left_fft);
         self.right_fft.render(&mut target, &values.right_fft);
+
+        self.left_phase.render(&mut target, &values.phase_left);
 
         target.finish().unwrap();
     }
@@ -70,6 +74,7 @@ pub struct App<'a> {
     audio: audio::Audio<'a>,
     processor: processing::Processor,
     renderer: Option<Renderer>,
+    counter: usize,
 }
 
 impl App<'_> {
@@ -80,17 +85,19 @@ impl App<'_> {
         max_framerate: f32, 
         audio_file: &str, 
         sample_window: usize, 
-        fft_output_bins: usize
+        fft_output_bins: usize,
+        phase_pts: usize,
     ) -> Self {
         let window_settings= WindowSettings::new(title, width, height, max_framerate);
         let audio = audio::Audio::new(audio_file, sample_window);
-        let processor = processing::Processor::new(sample_window, fft_output_bins);
+        let processor = processing::Processor::new(sample_window, fft_output_bins, phase_pts);
         
         Self {
             window_settings,
             audio,
             processor,
             renderer: None,
+            counter: 0,
         }
     }
 
@@ -98,7 +105,8 @@ impl App<'_> {
         let render_data = Renderer::new(
             &display,
             window,
-            self.processor.fft_output_bins
+            self.processor.fft_output_bins,
+            self.processor.phase_pts,
         );
         
         self.renderer = Some(render_data);
@@ -133,6 +141,11 @@ impl winit::application::ApplicationHandler for App<'_> {
             winit::event::WindowEvent::RedrawRequested => {
                 self.render();
                 let elapsed = Instant::now().duration_since(self.window_settings.last_refresh);
+                self.counter += 1;
+                if self.counter > 30 {
+                    println!("{:#?}", 1. / (elapsed).as_secs_f32());
+                    self.counter = 0;
+                }
                 let delay = self.window_settings.frametime.saturating_sub(elapsed);
                 std::thread::sleep(delay);
                 self.window_settings.last_refresh = Instant::now();

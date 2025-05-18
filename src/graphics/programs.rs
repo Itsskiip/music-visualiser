@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use glium::{Frame, Program, Surface, VertexBuffer};
 use crate::graphics::Display;
 pub mod fftprogram;
+pub mod phaseprogram;
 
 #[derive(Clone)]
 pub struct ShaderSrc {
